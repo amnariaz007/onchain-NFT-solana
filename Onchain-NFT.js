@@ -63,7 +63,7 @@ async function testDeployedContract() {
     // const payer = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
 
     // Method 2: Use array format (64 numbers)
-    const payer = Keypair.fromSecretKey(Uint8Array.from([50, 194, 194, 111, 16, 237, 232, 77, 113, 222, 140, 219, 249, 242, 197, 138, 219, 25, 215, 46, 22, 8, 7, 8, 9, 243, 213, 31, 248, 121, 241, 189, 154, 112, 54, 192, 189, 11, 93, 205, 37, 234, 194, 35, 223, 189, 92, 55, 124, 196, 120, 149, 47, 107, 69, 200, 150, 127, 71, 45, 194, 244, 176, 132]));
+    const payer = Keypair.fromSecretKey(Uint8Array.from(["private key here"]));
 
     // Method 3: Load from file (if you exported to file)
     // import fs from 'fs';
