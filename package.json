@@ -1,0 +1,20 @@
+{
+  "name": "onchain-nft",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Solana NFT minting script",
+  "main": "Onchain-NFT.js",
+  "scripts": {
+    "start": "node Onchain-NFT.js",
+    "test": "node Onchain-NFT.js"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.87.6",
+    "@solana/spl-token": "^0.3.9",
+    "borsh": "^0.7.0"
+  },
+  "devDependencies": {},
+  "keywords": ["solana", "nft", "blockchain"],
+  "author": "Your Name",
+  "license": "MIT"
+}

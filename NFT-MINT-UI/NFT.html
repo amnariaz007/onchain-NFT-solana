@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+     <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/safe-buffer@5.2.1/index.min.js"></script>
+    <title>NFT Minting Test Interface</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 0;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            background: rgba(46, 204, 113, 0.3);
+        }
+        .error {
+            background: rgba(231, 76, 60, 0.3);
+        }
+        .info {
+            background: rgba(52, 152, 219, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .wallet-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 NFT Minting Test</h1>
+        
+        <div class="wallet-info">
+            <p><strong>Program ID:</strong> <span id="programId">6WaHa4SbXsbTr1umnWBGpsYTh7btxLFn3DcE2m8ExhhC</span></p>
+            <p><strong>Network:</strong> Devnet</p>
+            <p><strong>Wallet:</strong> <span id="walletAddress">Not connected</span></p>
+            <p><strong>Balance:</strong> <span id="walletBalance">0 SOL</span></p>
+        </div>
+
+        <button onclick="connectWallet()" id="connectBtn">Connect Phantom Wallet</button>
+        <button onclick="requestAirdrop()" id="airdropBtn" disabled>Request Airdrop (1 SOL)</button>
+
+        <form onsubmit="mintNFT(event)" id="mintForm">
+            <div class="form-group">
+                <label for="nftName">NFT Name:</label>
+                <input type="text" id="nftName" value="My Test NFT" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="nftSymbol">NFT Symbol:</label>
+                <input type="text" id="nftSymbol" value="TESTNFT" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="nftUri">Metadata URI:</label>
+                <input type="url" id="nftUri" value="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" required>
+            </div>
+            
+            <button type="submit" id="mintBtn" disabled>Mint NFT</button>
+        </form>
+
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- Load Solana Web3.js from CDN -->
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+
+    
+    <script>
+
+        // Wait for libraries to load
+        window.addEventListener('load', function() {
+            initializeApp();
+        });
+
+        const PROGRAM_ID = '6WaHa4SbXsbTr1umnWBGpsYTh7btxLFn3DcE2m8ExhhC';
+        const METADATA_PROGRAM_ID = 'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s';
+        let connection;
+        let wallet;
+
+        function initializeApp() {
+            // Check if Solana Web3.js is loaded
+            if (typeof solanaWeb3 === 'undefined') {
+                showResult('Error: Solana Web3.js library failed to load. Please refresh the page.', 'error');
+                return;
+            }
+            
+            showResult('App initialized successfully. Ready to connect wallet.', 'info');
+        }
+
+        async function connectWallet() {
+            if (typeof solanaWeb3 === 'undefined') {
+                showResult('Solana Web3.js library not loaded. Please refresh the page.', 'error');
+                return;
+            }
+
+            if (typeof window.solana !== 'undefined') {
+                try {
+                    showResult('Connecting to wallet...', 'info');
+                    const response = await window.solana.connect();
+                    wallet = window.solana;
+                    connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+                    
+                    document.getElementById('walletAddress').textContent = response.publicKey.toString();
+                    document.getElementById('airdropBtn').disabled = false;
+                    document.getElementById('mintBtn').disabled = false;
+                    document.getElementById('connectBtn').textContent = 'Wallet Connected ✓';
+                    document.getElementById('connectBtn').disabled = true;
+                    
+                    await updateBalance();
+                    showResult('Wallet connected successfully!', 'success');
+                } catch (err) {
+                    showResult('Failed to connect wallet: ' + err.message, 'error');
+                }
+            } else {
+                showResult('Phantom wallet not found! Please install Phantom wallet extension and refresh the page.', 'error');
+            }
+        }
+
+        async function updateBalance() {
+            if (wallet && connection) {
+                try {
+                    const balance = await connection.getBalance(wallet.publicKey);
+                    document.getElementById('walletBalance').textContent = (balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+                } catch (err) {
+                    console.error('Error getting balance:', err);
+                }
+            }
+        }
+
+        async function requestAirdrop() {
+            if (!wallet || !connection) {
+                showResult('Please connect your wallet first!', 'error');
+                return;
+            }
+            
+            const airdropBtn = document.getElementById('airdropBtn');
+            airdropBtn.disabled = true;
+            airdropBtn.textContent = 'Requesting...';
+            
+            try {
+                showResult('Requesting airdrop... This may take up to 30 seconds.', 'info');
+                const signature = await connection.requestAirdrop(
+                    wallet.publicKey,
+                    solanaWeb3.LAMPORTS_PER_SOL
+                );
+                
+                showResult('Airdrop transaction sent. Waiting for confirmation...', 'info');
+                await connection.confirmTransaction(signature, 'confirmed');
+                
+                await updateBalance();
+                showResult(`Airdrop successful! 
+Transaction: ${signature}
+View on Explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`, 'success');
+            } catch (err) {
+                showResult('Airdrop failed: ' + err.message + '\nNote: Airdrop limits may apply. Try again later.', 'error');
+            } finally {
+                airdropBtn.disabled = false;
+                airdropBtn.textContent = 'Request Airdrop (1 SOL)';
+            }
+        }
+
+        async function mintNFT(event) {
+            event.preventDefault();
+            
+            if (!wallet || !connection) {
+                showResult('Please connect your wallet first!', 'error');
+                return;
+            }
+
+            const form = document.getElementById('mintForm');
+            const mintBtn = document.getElementById('mintBtn');
+            form.classList.add('loading');
+            mintBtn.disabled = true;
+            mintBtn.textContent = 'Minting...';
+
+            const name = document.getElementById('nftName').value;
+            const symbol = document.getElementById('nftSymbol').value;
+            const uri = document.getElementById('nftUri').value;
+
+            try {
+                showResult('Preparing NFT mint transaction...', 'info');
+                
+                // Generate mint keypair
+                const mintKeypair = solanaWeb3.Keypair.generate();
+                
+                // Get associated token account address
+                const associatedTokenAccount = await getAssociatedTokenAddress(
+                    mintKeypair.publicKey,
+                    wallet.publicKey
+                );
+
+                // Derive metadata PDA
+                const [metadataAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+                    [
+                        window.Buffer.from("metadata"),
+                        new solanaWeb3.PublicKey(METADATA_PROGRAM_ID).toBuffer(),
+                        mintKeypair.publicKey.toBuffer(),
+                    ],
+                    new solanaWeb3.PublicKey(METADATA_PROGRAM_ID)
+                );
+
+                // Derive master edition PDA
+                const [masterEditionAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+                    [
+                        window.Buffer.from("metadata"),
+                        new solanaWeb3.PublicKey(METADATA_PROGRAM_ID).toBuffer(),
+                        mintKeypair.publicKey.toBuffer(),
+                        window.Buffer.from("edition"),
+                    ],
+                    new solanaWeb3.PublicKey(METADATA_PROGRAM_ID)
+                );
+
+                showResult('Creating mint instruction...', 'info');
+
+                // Create instruction data (simplified borsh serialization)
+                const instructionData = createMintInstruction(name, symbol, uri);
+
+                // Create instruction
+                const instruction = new solanaWeb3.TransactionInstruction({
+                    keys: [
+                        { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                        { pubkey: mintKeypair.publicKey, isSigner: true, isWritable: true },
+                        { pubkey: associatedTokenAccount, isSigner: false, isWritable: true },
+                        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+                        { pubkey: masterEditionAccount, isSigner: false, isWritable: true },
+                        { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false }, // Token Program
+                        { pubkey: new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'), isSigner: false, isWritable: false }, // Associated Token Program
+                        { pubkey: new solanaWeb3.PublicKey(METADATA_PROGRAM_ID), isSigner: false, isWritable: false }, // Metadata Program
+                        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
+                        { pubkey: solanaWeb3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false }, // Rent Sysvar
+                    ],
+                    programId: new solanaWeb3.PublicKey(PROGRAM_ID),
+                    data: instructionData,
+                });
+
+                // Create transaction
+                const transaction = new solanaWeb3.Transaction().add(instruction);
+                
+                // Get latest blockhash
+                const { blockhash } = await connection.getLatestBlockhash('confirmed');
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = wallet.publicKey;
+
+                // Sign with mint keypair
+                transaction.partialSign(mintKeypair);
+
+                showResult('Sending transaction... Please approve in your wallet.', 'info');
+
+                // Send transaction
+                const signedTransaction = await wallet.signTransaction(transaction);
+                const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                
+                showResult('Transaction sent! Waiting for confirmation...', 'info');
+                
+                // Wait for confirmation
+                await connection.confirmTransaction(signature, 'confirmed');
+                
+                showResult(`🎉 NFT minted successfully!
+
+Transaction: ${signature}
+Mint Address: ${mintKeypair.publicKey.toString()}
+Metadata Account: ${metadataAccount.toString()}
+
+View on Solana Explorer:
+https://explorer.solana.com/tx/${signature}?cluster=devnet
+
+View NFT:
+https://explorer.solana.com/address/${mintKeypair.publicKey.toString()}?cluster=devnet`, 'success');
+
+                // Reset form
+                document.getElementById('nftName').value = 'My Test NFT';
+                document.getElementById('nftSymbol').value = 'TESTNFT';
+                
+                await updateBalance();
+
+            } catch (err) {
+                showResult('❌ Error minting NFT: ' + err.message + '\n\nFull error details in console.', 'error');
+                console.error('Full error:', err);
+            } finally {
+                form.classList.remove('loading');
+                mintBtn.disabled = false;
+                mintBtn.textContent = 'Mint NFT';
+            }
+        }
+
+        // Helper function to create instruction data
+        function createMintInstruction(name, symbol, uri) {
+            // Simple instruction data creation (you may need to adjust this based on your program)
+            const nameBuffer = window.Buffer.from(name, 'utf8');
+            const symbolBuffer = window.Buffer.from(symbol, 'utf8');
+            const uriBuffer = window.Buffer.from(uri, 'utf8');
+            
+            // Calculate total size needed
+            const totalSize = 1 + 4 + nameBuffer.length + 4 + symbolBuffer.length + 4 + uriBuffer.length;
+            const data = Buffer.alloc(totalSize);
+            
+            let offset = 0;
+            
+            // Instruction discriminator (0 for mint_nft)
+            data.writeUInt8(0, offset);
+            offset += 1;
+            
+            // Name (length + data)
+            data.writeUInt32LE(nameBuffer.length, offset);
+            offset += 4;
+            nameBuffer.copy(data, offset);
+            offset += nameBuffer.length;
+            
+            // Symbol (length + data)
+            data.writeUInt32LE(symbolBuffer.length, offset);
+            offset += 4;
+            symbolBuffer.copy(data, offset);
+            offset += symbolBuffer.length;
+            
+            // URI (length + data)
+            data.writeUInt32LE(uriBuffer.length, offset);
+            offset += 4;
+            uriBuffer.copy(data, offset);
+            offset += uriBuffer.length;
+            
+            return data;
+        }
+
+        // Helper function for associated token address
+        async function getAssociatedTokenAddress(mint, owner) {
+            const [address] = solanaWeb3.PublicKey.findProgramAddressSync(
+                [
+                    owner.toBuffer(),
+                    new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
+                    mint.toBuffer(),
+                ],
+                new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+            );
+            return address;
+        }
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+            
+            // Scroll to result
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Check if Phantom is installed on page load
+        if (typeof window.solana === 'undefined') {
+            setTimeout(() => {
+                if (typeof window.solana === 'undefined') {
+                    showResult('Phantom wallet not detected. Please install Phantom wallet extension.', 'error');
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
